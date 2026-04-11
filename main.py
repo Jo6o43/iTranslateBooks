@@ -4,82 +4,82 @@ from bs4 import BeautifulSoup
 import openai
 from tqdm import tqdm
 import os
+import re
 
-# --- CONFIGURAÇÕES ---
-INPUT_FILE = "books_IN/Chivalry_of_a_Failed_Knight_Vol1.epub"
-OUTPUT_FILE = "books_OUT/Chivalry_V1_Final_Pro_try2.epub"
+INPUT_FILE = "books_IN/Rakudai Kishi no Eiyuutan - 01.epub"
+OUTPUT_FILE = "books_OUT/Rakudai Kishi no Eiyuutan - 01_try3.epub"
 MODEL_NAME = "qwen3-v1-8b-instruct"
 BASE_URL = "http://127.0.0.1:1234/v1"
 
 client = openai.OpenAI(base_url=BASE_URL, api_key="lm-studio")
 
-# --- O TEU PROMPT DE ELITE (RESTAURADO E MELHORADO) ---
 SYSTEM_PROMPT = """
-Você é um tradutor literário de elite, especializado na localização de Light Novels para o Português de Portugal (PT-PT). 
-Sua missão é realizar uma tradução fluida, respeitando as normas gramaticais e o vocabulário de Portugal.
+You are an elite literary translator specializing in localizing Light Novels into Brazilian Portuguese (PT-BR).
+Your mission is to provide a fluent, pleasant, and natural translation, respecting the stylistic norms of Brazil.
 
-DIRETRIZES ESTILÍSTICAS (PT-PT):
-1. GERÚNDIO: Proibido o uso do gerúndio brasileiro. Utilize a construção 'estou a fazer' em vez de 'estou fazendo'.
-2. PRONOMES: Utilize a colocação pronominal de Portugal (ênclise). Ex: 'deu-me' em vez de 'me deu'.
-3. VOCABULÁRIO: Utilize termos de Portugal (ex: 'ecrã', 'telemóvel', 'comboio', 'casa de banho').
-4. TRATAMENTO: Utilize o 'tu' para diálogos informais entre personagens. Use 'você' apenas para formalidade estrita.
+STYLISTIC GUIDELINES (PT-BR):
+1. GERUND: Use the natural Brazilian gerund natively (e.g., 'estou fazendo' instead of 'estou a fazer').
+2. PRONOUNS: Use natural Brazilian pronominal placement. It can sound more fluent to use proclisis (e.g., 'me deu' instead of 'deu-me').
+3. VOCABULARY: Use Brazilian vocabulary (e.g., 'tela', 'celular', 'trem', 'banheiro', 'geladeira').
+4. ADDRESS: Default to using 'você' for dialogues, preserving the classic informality of Light Novels.
 
-TERMINOLOGIA A MANTER (NÃO TRADUZIR):
+TERMINOLOGY TO KEEP (DO NOT TRANSLATE):
 - 'Blazer', 'Device', 'Noble Art', 'Mana', 'Magic Knight'.
-- NOMES: Ikki, Stella, Shizuku, Alice, Kurogane.
+- NAMES: Ikki, Stella, Shizuku, Alice, Kurogane.
 
-REGRAS TÉCNICAS DE SAÍDA:
-- O texto contém etiquetas HTML (como <a href="...">). MANTÉM estas etiquetas intactas e na posição correta.
-- Retorne APENAS a tradução pura do conteúdo. Sem comentários.
-- Use o travessão (—) para diálogos.
+TECHNICAL OUTPUT RULES:
+- The text contains HTML tags (such as <a href="...">). KEEP these tags intact and in their correct original positions.
+- Return ONLY the pure translation of the content. No comments, no explanations.
+- Use the em dash (—) for dialogues.
 """
 
 def translate_content(html_snippet):
     if not html_snippet.strip() or len(html_snippet) < 3:
         return html_snippet
     
+    html_snippet = html_snippet.replace('\ufffd', '')
+    html_snippet = re.sub(r'[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf\u3000-\u303f\uff00-\uffef]', '', html_snippet)
+    
     try:
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Traduza preservando o HTML: {html_snippet}"}
+                {"role": "user", "content": f"Translate while preserving HTML formatting: {html_snippet}"}
             ],
             temperature=0.3
         )
         return response.choices[0].message.content
     except Exception as e:
-        print(f"\n[ERRO] Falha no parágrafo: {e}")
+        print(f"\n[ERROR] Translation failed for snippet: {e}")
         return html_snippet
 
 def process_epub():
     if not os.path.exists(INPUT_FILE):
-        print(f"Erro: '{INPUT_FILE}' não encontrado!")
+        print(f"[ERROR] Input file not found: {INPUT_FILE}")
         return
 
     book = epub.read_epub(INPUT_FILE)
     items = list(book.get_items_of_type(ebooklib.ITEM_DOCUMENT))
     
-    print(f"🚀 Tradução de Elite iniciada (PT-PT + Links + 4060 Ti)...")
+    print("Starting translation process...")
     
-    for item in tqdm(items, desc="Capítulos"):
+    for item in tqdm(items, desc="Chapters"):
         soup = BeautifulSoup(item.get_content(), 'html.parser')
         
-        # Traduzimos o conteúdo preservando a estrutura interna (links, negritos, etc)
         for tag in soup.find_all(['p', 'h1', 'h2', 'h3']):
             original_inner_html = tag.decode_contents()
             
             if original_inner_html.strip():
                 translated_html = translate_content(original_inner_html)
                 tag.clear()
-                # Reinsere o HTML traduzido de volta na tag
                 tag.append(BeautifulSoup(translated_html, 'html.parser'))
         
         item.set_content(str(soup).encode('utf-8'))
 
-    book.set_language('pt-PT')
+    book.set_language('pt-BR')
     epub.write_epub(OUTPUT_FILE, book)
-    print(f"\n✅ SUCESSO! Livro com links e estilo PT-PT guardado como: {OUTPUT_FILE}")
+    print(f"\n[SUCCESS] Translation completed successfully. Saved as: {OUTPUT_FILE}")
 
 if __name__ == "__main__":
     process_epub()
