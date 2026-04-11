@@ -2,3 +2,4 @@ ebooklib
 beautifulsoup4
 openai
 tqdm
+tenacity
