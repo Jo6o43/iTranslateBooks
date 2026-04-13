@@ -5,6 +5,7 @@ import os
 import glob
 from src.config import AppConfig
 from src.epub_core import process_epub
+from src.paths_store import ensure_books_dirs, output_path_for_epub
 
 def _format_time(seconds):
     m, s = divmod(int(seconds), 60)
@@ -46,7 +47,7 @@ def run_translation(input_file, output_file, max_workers, model, base_url):
     process_epub(config, log_callback=runner.log, progress_callback=runner.progress)
 
 def main():
-    parser = argparse.ArgumentParser(description="Elite EPUB Translator")
+    parser = argparse.ArgumentParser(description="iTranslateBooks (CLI)")
     parser.add_argument("--input", type=str, help="Single input file")
     parser.add_argument("--output", type=str, help="Output file")
     parser.add_argument("--workers", type=int, default=3, help="Max parallel workers")
@@ -59,14 +60,16 @@ def main():
         output = args.output or args.input.replace(".epub", "_PT_BR.epub")
         run_translation(args.input, output, args.workers, args.model, args.url)
     else:
-        print("[INFO] Nenhum input definido. Buscando EPUBs na pasta books_IN/")
-        files = glob.glob("books_IN/*.epub")
+        books_in, books_out = ensure_books_dirs()
+        print(f"[INFO] Nenhum input definido. Buscando EPUBs em: {books_in}")
+        pattern = os.path.join(books_in, "*.epub")
+        files = glob.glob(pattern)
         if not files:
-            print("[INFO] Nenhum livro .epub encontrado na pasta books_IN/")
+            print(f"[INFO] Nenhum livro .epub encontrado em {books_in}")
             return
         for file in files:
             filename = os.path.basename(file)
-            output = args.output or f"books_OUT/{filename.replace('.epub', '_PT_BR.epub')}"
+            output = args.output or output_path_for_epub(file, books_out)
             run_translation(file, output, args.workers, args.model, args.url)
 
 if __name__ == "__main__":

@@ -220,5 +220,8 @@ books_IN/*
 books_OUT/*
 !books_OUT/.gitkeep
 
+# Pastas e configuração local da app (UI / CLI)
+itranslatebooks_config.json
+
 database
 todo.txt
