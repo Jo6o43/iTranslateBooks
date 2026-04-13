@@ -32,6 +32,9 @@ CURSOR_SUCCESS_HOVER = "#10b981"
 CURSOR_DANGER = "#f87171"
 CURSOR_DANGER_HOVER = "#ef4444"
 
+# Cantos rectos (alinhado a IDE; evita “gaps” entre bordas e widgets arredondados)
+R0 = 0
+
 class TranslatorApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -76,7 +79,7 @@ class TranslatorApp(ctk.CTk):
             text="EX",
             width=44,
             height=44,
-            corner_radius=6,
+            corner_radius=R0,
             fg_color=CURSOR_ACCENT,
             hover_color=CURSOR_ACCENT_HOVER,
             command=lambda: self.set_view("explorer"),
@@ -88,7 +91,7 @@ class TranslatorApp(ctk.CTk):
             text="SP",
             width=44,
             height=44,
-            corner_radius=6,
+            corner_radius=R0,
             fg_color=CURSOR_ACTIVITYBAR,
             hover_color=CURSOR_PANEL,
             command=lambda: self.set_view("prompt"),
@@ -100,7 +103,7 @@ class TranslatorApp(ctk.CTk):
             text="⚙",
             width=44,
             height=44,
-            corner_radius=6,
+            corner_radius=R0,
             fg_color=CURSOR_ACTIVITYBAR,
             hover_color=CURSOR_PANEL,
             command=lambda: self.set_view("settings"),
@@ -176,6 +179,7 @@ class TranslatorApp(ctk.CTk):
             self.run_controls,
             text="Run",
             width=78,
+            corner_radius=R0,
             fg_color=CURSOR_SUCCESS,
             hover_color=CURSOR_SUCCESS_HOVER,
             command=self.start_translation,
@@ -186,6 +190,7 @@ class TranslatorApp(ctk.CTk):
             self.run_controls,
             text="Stop",
             width=78,
+            corner_radius=R0,
             fg_color=CURSOR_DANGER,
             hover_color=CURSOR_DANGER_HOVER,
             command=self.stop_translation,
@@ -228,14 +233,27 @@ class TranslatorApp(ctk.CTk):
         self.progress_wrap = ctk.CTkFrame(self.bottom_header, fg_color="transparent")
         self.progress_wrap.grid(row=0, column=1, sticky="e")
 
-        self.progress_bar = ctk.CTkProgressBar(self.progress_wrap, width=220, progress_color=CURSOR_ACCENT)
+        self.progress_bar = ctk.CTkProgressBar(
+            self.progress_wrap,
+            width=220,
+            height=12,
+            corner_radius=R0,
+            progress_color=CURSOR_ACCENT,
+        )
         self.progress_bar.pack(side="left", padx=(0, 10))
         self.progress_bar.set(0)
 
         self.eta_label = ctk.CTkLabel(self.progress_wrap, text="ETA: -- | 0/0", text_color=CURSOR_TEXT, font=ctk.CTkFont(size=12))
         self.eta_label.pack(side="left")
 
-        self.console = ctk.CTkTextbox(self.bottom_panel, fg_color=CURSOR_BG, text_color=CURSOR_TEXT, border_width=1, border_color=CURSOR_BORDER)
+        self.console = ctk.CTkTextbox(
+            self.bottom_panel,
+            fg_color=CURSOR_BG,
+            text_color=CURSOR_TEXT,
+            border_width=1,
+            border_color=CURSOR_BORDER,
+            corner_radius=R0,
+        )
         self.console.grid(row=1, column=0, padx=12, pady=(0, 12), sticky="nsew")
         self.console.configure(state="disabled")
 
@@ -289,7 +307,7 @@ class TranslatorApp(ctk.CTk):
         self.set_view("prompt")
 
     def _build_queue_panel(self):
-        self.queue_panel = ctk.CTkFrame(self.editor_body, fg_color=CURSOR_PANEL, corner_radius=10, border_width=1, border_color=CURSOR_BORDER)
+        self.queue_panel = ctk.CTkFrame(self.editor_body, fg_color=CURSOR_PANEL, corner_radius=R0, border_width=1, border_color=CURSOR_BORDER)
         self.queue_panel.grid(row=0, column=0, sticky="nsew")
         self.queue_panel.grid_columnconfigure(0, weight=1)
         self.queue_panel.grid_rowconfigure(1, weight=1)
@@ -308,6 +326,7 @@ class TranslatorApp(ctk.CTk):
             actions,
             text="Clear",
             width=78,
+            corner_radius=R0,
             fg_color=CURSOR_BG,
             hover_color="#2a2a2a",
             border_width=1,
@@ -320,6 +339,7 @@ class TranslatorApp(ctk.CTk):
             actions,
             text="Open IN",
             width=78,
+            corner_radius=R0,
             fg_color=CURSOR_BG,
             hover_color="#2a2a2a",
             border_width=1,
@@ -332,6 +352,7 @@ class TranslatorApp(ctk.CTk):
             actions,
             text="Open OUT",
             width=88,
+            corner_radius=R0,
             fg_color=CURSOR_BG,
             hover_color="#2a2a2a",
             border_width=1,
@@ -340,7 +361,7 @@ class TranslatorApp(ctk.CTk):
         )
         self.queue_open_out_btn.pack(side="left")
 
-        self.queue_list = ctk.CTkScrollableFrame(self.queue_panel, fg_color="transparent", label_text="")
+        self.queue_list = ctk.CTkScrollableFrame(self.queue_panel, fg_color="transparent", label_text="", corner_radius=R0)
         self.queue_list.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="nsew")
 
         footer = ctk.CTkFrame(self.queue_panel, fg_color="transparent")
@@ -391,7 +412,7 @@ class TranslatorApp(ctk.CTk):
             base = os.path.basename(item.get("input", ""))
             out_path = item.get("output")
 
-            row = ctk.CTkFrame(self.queue_list, fg_color=CURSOR_BG, corner_radius=8, border_width=1, border_color=CURSOR_BORDER)
+            row = ctk.CTkFrame(self.queue_list, fg_color=CURSOR_BG, corner_radius=R0, border_width=1, border_color=CURSOR_BORDER)
             row.grid(row=i, column=0, padx=6, pady=6, sticky="ew")
             row.grid_columnconfigure(0, weight=1)
 
@@ -410,6 +431,7 @@ class TranslatorApp(ctk.CTk):
                 row,
                 text="Open",
                 width=74,
+                corner_radius=R0,
                 fg_color=CURSOR_PANEL,
                 hover_color="#2f2f2f",
                 border_width=1,
@@ -466,6 +488,7 @@ class TranslatorApp(ctk.CTk):
             header,
             text="Refresh",
             width=88,
+            corner_radius=R0,
             fg_color=CURSOR_PANEL,
             hover_color="#2f2f2f",
             border_width=1,
@@ -474,7 +497,7 @@ class TranslatorApp(ctk.CTk):
         )
         self.refresh_btn.grid(row=0, column=1, sticky="e")
 
-        self.books_frame = ctk.CTkScrollableFrame(self.explorer_view, fg_color="transparent", label_text="")
+        self.books_frame = ctk.CTkScrollableFrame(self.explorer_view, fg_color="transparent", label_text="", corner_radius=R0)
         self.books_frame.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="nsew")
 
         footer = ctk.CTkFrame(self.explorer_view, fg_color="transparent")
@@ -484,6 +507,7 @@ class TranslatorApp(ctk.CTk):
         self.select_all_btn = ctk.CTkButton(
             footer,
             text="Select all",
+            corner_radius=R0,
             fg_color=CURSOR_PANEL,
             hover_color="#2f2f2f",
             border_width=1,
@@ -495,6 +519,7 @@ class TranslatorApp(ctk.CTk):
         self.clear_all_btn = ctk.CTkButton(
             footer,
             text="Clear",
+            corner_radius=R0,
             fg_color=CURSOR_PANEL,
             hover_color="#2f2f2f",
             border_width=1,
@@ -537,7 +562,7 @@ class TranslatorApp(ctk.CTk):
         wrap.pack(fill="both", expand=True)
         wrap.grid_columnconfigure(0, weight=1)
 
-        form = ctk.CTkFrame(wrap, fg_color=CURSOR_PANEL, corner_radius=10, border_width=1, border_color=CURSOR_BORDER)
+        form = ctk.CTkFrame(wrap, fg_color=CURSOR_PANEL, corner_radius=R0, border_width=1, border_color=CURSOR_BORDER)
         form.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
         form.grid_columnconfigure(0, weight=1)
 
@@ -550,7 +575,7 @@ class TranslatorApp(ctk.CTk):
         in_row.grid(row=1, column=0, padx=12, pady=(0, 8), sticky="ew")
         in_row.grid_columnconfigure(0, weight=1)
 
-        self.books_in_entry = ctk.CTkEntry(in_row, placeholder_text="books_IN")
+        self.books_in_entry = ctk.CTkEntry(in_row, placeholder_text="books_IN", corner_radius=R0)
         self.books_in_entry.grid(row=0, column=0, padx=(0, 8), sticky="ew")
         self.books_in_entry.insert(0, s0["books_in_dir"])
 
@@ -558,6 +583,7 @@ class TranslatorApp(ctk.CTk):
             in_row,
             text="…",
             width=36,
+            corner_radius=R0,
             fg_color=CURSOR_BG,
             hover_color="#2a2a2a",
             border_width=1,
@@ -572,7 +598,7 @@ class TranslatorApp(ctk.CTk):
         out_row.grid(row=3, column=0, padx=12, pady=(0, 8), sticky="ew")
         out_row.grid_columnconfigure(0, weight=1)
 
-        self.books_out_entry = ctk.CTkEntry(out_row, placeholder_text="books_OUT")
+        self.books_out_entry = ctk.CTkEntry(out_row, placeholder_text="books_OUT", corner_radius=R0)
         self.books_out_entry.grid(row=0, column=0, padx=(0, 8), sticky="ew")
         self.books_out_entry.insert(0, s0["books_out_dir"])
 
@@ -580,6 +606,7 @@ class TranslatorApp(ctk.CTk):
             out_row,
             text="…",
             width=36,
+            corner_radius=R0,
             fg_color=CURSOR_BG,
             hover_color="#2a2a2a",
             border_width=1,
@@ -590,6 +617,7 @@ class TranslatorApp(ctk.CTk):
         ctk.CTkButton(
             form,
             text="Guardar pastas",
+            corner_radius=R0,
             fg_color=CURSOR_ACCENT,
             hover_color=CURSOR_ACCENT_HOVER,
             command=self.save_folder_paths,
@@ -598,21 +626,29 @@ class TranslatorApp(ctk.CTk):
         self.url_label = ctk.CTkLabel(form, text="Base URL", text_color=CURSOR_MUTED, font=ctk.CTkFont(size=12))
         self.url_label.grid(row=5, column=0, padx=12, pady=(4, 4), sticky="w")
 
-        self.url_entry = ctk.CTkEntry(form, placeholder_text="http://127.0.0.1:1234/v1")
+        self.url_entry = ctk.CTkEntry(form, placeholder_text="http://127.0.0.1:1234/v1", corner_radius=R0)
         self.url_entry.grid(row=6, column=0, padx=12, pady=(0, 10), sticky="ew")
         self.url_entry.insert(0, "http://127.0.0.1:1234/v1")
 
         self.model_label = ctk.CTkLabel(form, text="Model", text_color=CURSOR_MUTED, font=ctk.CTkFont(size=12))
         self.model_label.grid(row=7, column=0, padx=12, pady=(0, 4), sticky="w")
 
-        self.model_entry = ctk.CTkEntry(form, placeholder_text="qwen3-v1-8b-instruct")
+        self.model_entry = ctk.CTkEntry(form, placeholder_text="qwen3-v1-8b-instruct", corner_radius=R0)
         self.model_entry.grid(row=8, column=0, padx=12, pady=(0, 10), sticky="ew")
         self.model_entry.insert(0, "qwen3-v1-8b-instruct")
 
         self.slider_label = ctk.CTkLabel(form, text="Workers: 3", text_color=CURSOR_MUTED, font=ctk.CTkFont(size=12))
         self.slider_label.grid(row=9, column=0, padx=12, pady=(0, 2), sticky="w")
 
-        self.worker_slider = ctk.CTkSlider(form, from_=1, to=8, number_of_steps=7, command=self.update_slider_label)
+        self.worker_slider = ctk.CTkSlider(
+            form,
+            from_=1,
+            to=8,
+            number_of_steps=7,
+            command=self.update_slider_label,
+            corner_radius=R0,
+            button_corner_radius=R0,
+        )
         self.worker_slider.set(3)
         self.worker_slider.grid(row=10, column=0, padx=12, pady=(0, 12), sticky="ew")
 
@@ -639,7 +675,14 @@ class TranslatorApp(ctk.CTk):
         )
         hint.grid(row=0, column=0, padx=10, pady=(10, 0), sticky="w")
 
-        self.prompt_text = ctk.CTkTextbox(wrap, fg_color=CURSOR_BG, text_color=CURSOR_TEXT, border_width=1, border_color=CURSOR_BORDER)
+        self.prompt_text = ctk.CTkTextbox(
+            wrap,
+            fg_color=CURSOR_BG,
+            text_color=CURSOR_TEXT,
+            border_width=1,
+            border_color=CURSOR_BORDER,
+            corner_radius=R0,
+        )
         self.prompt_text.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
         self.prompt_text.insert("0.0", DEFAULT_SYSTEM_PROMPT)
 
@@ -661,7 +704,11 @@ class TranslatorApp(ctk.CTk):
         files = glob.glob(pattern)
         for i, file in enumerate(files):
             filename = os.path.basename(file)
-            cb = ctk.CTkCheckBox(self.books_frame, text=filename)
+            cb = ctk.CTkCheckBox(
+                self.books_frame,
+                text=filename,
+                corner_radius=R0,
+            )
             cb.grid(row=i, column=0, padx=5, pady=5, sticky="w")
             cb.select()  # Check by default
             self.checkboxes.append((cb, file))
