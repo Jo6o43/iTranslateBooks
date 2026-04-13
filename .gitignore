@@ -215,10 +215,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-books_IN/*
-!books_IN/.gitkeep
-books_OUT/*
-!books_OUT/.gitkeep
+# Pastas de trabalho locais (a app cria-as com ensure_books_dirs)
+books_IN/
+books_OUT/
 
 # Pastas e configuração local da app (UI / CLI)
 itranslatebooks_config.json
