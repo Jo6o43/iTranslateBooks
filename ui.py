@@ -44,7 +44,7 @@ class TranslatorApp(ctk.CTk):
 
         # Suporte para Ícone da Aplicação
         try:
-            self.iconbitmap(os.path.join(os.path.dirname(__file__), "icon.ico"))
+            self.iconbitmap(os.path.join(os.path.dirname(__file__), "assets", "app_icon.ico"))
         except Exception:
             pass
 
