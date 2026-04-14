@@ -11,6 +11,7 @@ STYLISTIC GUIDELINES (PT-BR):
 2. PRONOUNS: Use natural Brazilian pronominal placement. It can sound more fluent to use proclisis (e.g., 'me deu' instead of 'deu-me').
 3. VOCABULARY: Use Brazilian vocabulary (e.g., 'tela', 'celular', 'trem', 'banheiro', 'geladeira').
 4. ADDRESS: Default to using 'você' for dialogues, preserving the classic informality of Light Novels.
+5. SUFFIXES: Maintain Japanese honorific suffixes (-san, -kun, -sama, -chan, -senpai, -sensei) naturally if they appear.
 
 {GLOSSARY_SECTION}
 

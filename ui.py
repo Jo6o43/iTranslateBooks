@@ -849,6 +849,20 @@ class TranslatorApp(ctk.CTk):
         threading.Thread(target=self._worker_thread, args=(selected_files, url, model, workers, prompt, use_ctx), daemon=True).start()
 
     def _worker_thread(self, files, url, model, workers, prompt, use_ctx):
+        self.log(f"[INFO] A verificar conexão ao servidor local ({url})...")
+        import urllib.request
+        try:
+            req = urllib.request.Request(url.rstrip('/') + "/models", method='GET')
+            with urllib.request.urlopen(req, timeout=3):
+                pass
+        except Exception:
+            self.log(f"[ERROR] O servidor falhou (LM Studio não está a correr em {url}). Tradução cancelada!")
+            self.after(0, lambda: self.run_btn.configure(state="normal"))
+            self.after(0, lambda: self.stop_btn.configure(state="disabled"))
+            self.after(0, lambda: self.set_status("Ready"))
+            self.is_running = False
+            return
+
         for file in files:
             self.log(f"\n--- Iniciando: {os.path.basename(file)} ---")
             
