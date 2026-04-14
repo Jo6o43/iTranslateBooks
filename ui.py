@@ -9,9 +9,9 @@ from src.config import AppConfig, DEFAULT_SYSTEM_PROMPT
 from src.epub_core import process_epub
 from src.paths_store import (
     ensure_books_dirs,
-    load_folder_settings,
+    load_app_settings,
     output_path_for_epub,
-    save_folder_settings,
+    save_app_settings,
 )
 
 ctk.set_appearance_mode("Dark")
@@ -286,7 +286,14 @@ class TranslatorApp(ctk.CTk):
     def _safe_startfile(self, path: str):
         try:
             os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-            os.startfile(path)  # Windows
+            import platform
+            import subprocess
+            if platform.system() == "Windows":
+                os.startfile(path)
+            elif platform.system() == "Darwin":
+                subprocess.run(["open", path], check=False)
+            else:
+                subprocess.run(["xdg-open", path], check=False)
         except Exception as e:
             self.log(f"[WARNING] Não foi possível abrir: {path} ({e})")
 
@@ -530,20 +537,31 @@ class TranslatorApp(ctk.CTk):
 
     def _sync_books_paths_ui(self):
         self.books_in_abs, self.books_out_abs = ensure_books_dirs()
-        s = load_folder_settings()
+        s = load_app_settings()
         if hasattr(self, "books_in_entry"):
             self.books_in_entry.delete(0, "end")
             self.books_in_entry.insert(0, s["books_in_dir"])
             self.books_out_entry.delete(0, "end")
             self.books_out_entry.insert(0, s["books_out_dir"])
+            self.glossary_text.delete("0.0", "end")
+            self.glossary_text.insert("0.0", s.get("glossary", ""))
+            if s.get("use_context", True):
+                self.context_checkbox.select()
+            else:
+                self.context_checkbox.deselect()
         self.books_path.configure(text=f"{s['books_in_dir'].rstrip(os.sep).rstrip('/')}/")
         self.status_right.configure(text=f"{s['books_in_dir']} → {s['books_out_dir']}")
 
     def save_folder_paths(self):
-        save_folder_settings(self.books_in_entry.get(), self.books_out_entry.get())
+        save_app_settings(
+            self.books_in_entry.get(),
+            self.books_out_entry.get(),
+            self.glossary_text.get("0.0", "end").strip(),
+            bool(self.context_checkbox.get())
+        )
         self._sync_books_paths_ui()
         self.refresh_books()
-        self.log("[INFO] Pastas IN/OUT guardadas (itranslatebooks_config.json).")
+        self.log("[INFO] Definições guardadas (itranslatebooks_config.json).")
 
     def browse_books_in(self):
         d = filedialog.askdirectory(initialdir=self.books_in_abs or os.getcwd())
@@ -566,7 +584,7 @@ class TranslatorApp(ctk.CTk):
         form.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
         form.grid_columnconfigure(0, weight=1)
 
-        s0 = load_folder_settings()
+        s0 = load_app_settings()
 
         self.books_in_label = ctk.CTkLabel(form, text="Pasta entrada (EPUBs)", text_color=CURSOR_MUTED, font=ctk.CTkFont(size=12))
         self.books_in_label.grid(row=0, column=0, padx=12, pady=(12, 4), sticky="w")
@@ -614,31 +632,22 @@ class TranslatorApp(ctk.CTk):
             command=self.browse_books_out,
         ).grid(row=0, column=1, sticky="e")
 
-        ctk.CTkButton(
-            form,
-            text="Guardar pastas",
-            corner_radius=R0,
-            fg_color=CURSOR_ACCENT,
-            hover_color=CURSOR_ACCENT_HOVER,
-            command=self.save_folder_paths,
-        ).grid(row=4, column=0, padx=12, pady=(0, 12), sticky="ew")
-
         self.url_label = ctk.CTkLabel(form, text="Base URL", text_color=CURSOR_MUTED, font=ctk.CTkFont(size=12))
-        self.url_label.grid(row=5, column=0, padx=12, pady=(4, 4), sticky="w")
+        self.url_label.grid(row=4, column=0, padx=12, pady=(4, 4), sticky="w")
 
         self.url_entry = ctk.CTkEntry(form, placeholder_text="http://127.0.0.1:1234/v1", corner_radius=R0)
-        self.url_entry.grid(row=6, column=0, padx=12, pady=(0, 10), sticky="ew")
+        self.url_entry.grid(row=5, column=0, padx=12, pady=(0, 10), sticky="ew")
         self.url_entry.insert(0, "http://127.0.0.1:1234/v1")
 
         self.model_label = ctk.CTkLabel(form, text="Model", text_color=CURSOR_MUTED, font=ctk.CTkFont(size=12))
-        self.model_label.grid(row=7, column=0, padx=12, pady=(0, 4), sticky="w")
+        self.model_label.grid(row=6, column=0, padx=12, pady=(0, 4), sticky="w")
 
         self.model_entry = ctk.CTkEntry(form, placeholder_text="qwen3-v1-8b-instruct", corner_radius=R0)
-        self.model_entry.grid(row=8, column=0, padx=12, pady=(0, 10), sticky="ew")
+        self.model_entry.grid(row=7, column=0, padx=12, pady=(0, 10), sticky="ew")
         self.model_entry.insert(0, "qwen3-v1-8b-instruct")
 
         self.slider_label = ctk.CTkLabel(form, text="Workers: 3", text_color=CURSOR_MUTED, font=ctk.CTkFont(size=12))
-        self.slider_label.grid(row=9, column=0, padx=12, pady=(0, 2), sticky="w")
+        self.slider_label.grid(row=8, column=0, padx=12, pady=(0, 2), sticky="w")
 
         self.worker_slider = ctk.CTkSlider(
             form,
@@ -650,7 +659,25 @@ class TranslatorApp(ctk.CTk):
             button_corner_radius=R0,
         )
         self.worker_slider.set(3)
-        self.worker_slider.grid(row=10, column=0, padx=12, pady=(0, 12), sticky="ew")
+        self.worker_slider.grid(row=9, column=0, padx=12, pady=(0, 12), sticky="ew")
+
+        self.glossary_label = ctk.CTkLabel(form, text="Glossário Dinâmico (Presets salvos em JSON):\nEscreva Ex: 'Mage: Mago'", text_color=CURSOR_MUTED, font=ctk.CTkFont(size=12), justify="left")
+        self.glossary_label.grid(row=10, column=0, padx=12, pady=(4, 4), sticky="w")
+
+        self.glossary_text = ctk.CTkTextbox(form, height=60, corner_radius=R0)
+        self.glossary_text.grid(row=11, column=0, padx=12, pady=(0, 8), sticky="ew")
+
+        self.context_checkbox = ctk.CTkCheckBox(form, text="Usar Contexto Anterior (Reduz alucinações de gêneros, ligeiramente mais lento)", corner_radius=R0)
+        self.context_checkbox.grid(row=12, column=0, padx=12, pady=(4, 8), sticky="w")
+
+        ctk.CTkButton(
+            form,
+            text="Guardar Definições",
+            corner_radius=R0,
+            fg_color=CURSOR_ACCENT,
+            hover_color=CURSOR_ACCENT_HOVER,
+            command=self.save_folder_paths,
+        ).grid(row=13, column=0, padx=12, pady=(0, 12), sticky="ew")
 
         tip = ctk.CTkLabel(
             wrap,
@@ -770,11 +797,23 @@ class TranslatorApp(ctk.CTk):
         model = self.model_entry.get()
         workers = int(self.worker_slider.get())
         prompt = self.prompt_text.get("0.0", "end").strip()
+        glossary = self.glossary_text.get("0.0", "end").strip()
+        use_ctx = bool(self.context_checkbox.get())
+        
+        if glossary:
+            glossary_block = f"TERMINOLOGY TO KEEP (DYNAMIC GLOSSARY):\n{glossary}"
+        else:
+            glossary_block = ""
+            
+        if "{GLOSSARY_SECTION}" in prompt:
+            prompt = prompt.replace("{GLOSSARY_SECTION}", glossary_block)
+        else:
+            prompt += "\n" + glossary_block
 
         # Disparar numa worker thread para garantir que o UI no se congele.
-        threading.Thread(target=self._worker_thread, args=(selected_files, url, model, workers, prompt), daemon=True).start()
+        threading.Thread(target=self._worker_thread, args=(selected_files, url, model, workers, prompt, use_ctx), daemon=True).start()
 
-    def _worker_thread(self, files, url, model, workers, prompt):
+    def _worker_thread(self, files, url, model, workers, prompt, use_ctx):
         for file in files:
             self.log(f"\n--- Iniciando: {os.path.basename(file)} ---")
             
@@ -789,6 +828,7 @@ class TranslatorApp(ctk.CTk):
                 base_url=url,
                 system_prompt=prompt,
                 max_workers=workers,
+                use_context=use_ctx,
                 cancel_event=self.cancel_event
             )
             

@@ -14,28 +14,36 @@ def sanitize_text(text: str) -> str:
     wait=wait_exponential(multiplier=1, min=2, max=10),
     reraise=True
 )
-def _call_llm(xml_payload: str, config: AppConfig) -> str:
-    client = openai.OpenAI(base_url=config.base_url, api_key="lm-studio")
-    response = client.chat.completions.create(
+async def _call_llm(xml_payload: str, config: AppConfig, context_str: str) -> str:
+    client = openai.AsyncOpenAI(base_url=config.base_url, api_key="lm-studio")
+    
+    messages = [{"role": "system", "content": config.system_prompt}]
+    if context_str and config.use_context:
+        messages.append({"role": "user", "content": f"Previous context for reference (Do not translate this block again):\n{context_str}"})
+        messages.append({"role": "assistant", "content": "Understood. I will use the previous context to ensure consistent terminology and character representation."})
+        
+    messages.append({"role": "user", "content": f"Translate while preserving HTML formatting:\n{xml_payload}"})
+        
+    response = await client.chat.completions.create(
         model=config.model_name,
-        messages=[
-            {"role": "system", "content": config.system_prompt},
-            {"role": "user", "content": f"Translate while preserving HTML formatting:\n{xml_payload}"}
-        ],
+        messages=messages,
         temperature=0.3
     )
     return response.choices[0].message.content
 
-def translate_batch_cached(xml_payload: str, config: AppConfig, log_callback=None) -> str:
+async def translate_batch_cached(xml_payload: str, config: AppConfig, context_str: str = '', log_callback=None) -> str:
     xml_payload = sanitize_text(xml_payload)
     
-    cached = get_cached_translation(xml_payload)
+    import os
+    epub_filename = os.path.basename(config.input_file)
+    
+    cached = get_cached_translation(xml_payload, epub_filename)
     if cached:
         return cached
         
     try:
-        translated = _call_llm(xml_payload, config)
-        save_translation(xml_payload, translated)
+        translated = await _call_llm(xml_payload, config, context_str)
+        save_translation(xml_payload, translated, epub_filename)
         return translated
     except Exception as e:
         msg = f"\n[ERROR] Translation failed after 4 retries. Skipping chunk. Reason: {e}"

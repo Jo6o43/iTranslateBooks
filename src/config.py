@@ -12,9 +12,7 @@ STYLISTIC GUIDELINES (PT-BR):
 3. VOCABULARY: Use Brazilian vocabulary (e.g., 'tela', 'celular', 'trem', 'banheiro', 'geladeira').
 4. ADDRESS: Default to using 'você' for dialogues, preserving the classic informality of Light Novels.
 
-TERMINOLOGY TO KEEP (DO NOT TRANSLATE):
-- 'Blazer', 'Device', 'Noble Art', 'Mana', 'Magic Knight'.
-- NAMES: Ikki, Stella, Shizuku, Alice, Kurogane.
+{GLOSSARY_SECTION}
 
 TECHNICAL OUTPUT RULES:
 - The input contains XML tags `<t id="...">` housing text blocks to be translated.
@@ -33,4 +31,5 @@ class AppConfig:
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
     max_workers: int = 3
     db_path: str = "database/cache.sqlite"
+    use_context: bool = True
     cancel_event: threading.Event = field(default_factory=threading.Event)

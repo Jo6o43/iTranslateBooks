@@ -24,11 +24,13 @@ def _to_stored_path(user_value: str, default: str) -> str:
         return str(p.resolve())
 
 
-def load_folder_settings() -> dict[str, str]:
+def load_app_settings() -> dict:
     if not CONFIG_PATH.is_file():
         return {
             "books_in_dir": DEFAULT_BOOKS_IN,
             "books_out_dir": DEFAULT_BOOKS_OUT,
+            "glossary": "",
+            "use_context": True
         }
     try:
         data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
@@ -36,22 +38,28 @@ def load_folder_settings() -> dict[str, str]:
         return {
             "books_in_dir": DEFAULT_BOOKS_IN,
             "books_out_dir": DEFAULT_BOOKS_OUT,
+            "glossary": "",
+            "use_context": True
         }
     inn = str(data.get("books_in_dir") or "").strip() or DEFAULT_BOOKS_IN
     out = str(data.get("books_out_dir") or "").strip() or DEFAULT_BOOKS_OUT
-    return {"books_in_dir": inn, "books_out_dir": out}
+    gloss = str(data.get("glossary", ""))
+    use_ctx = data.get("use_context", True)
+    return {"books_in_dir": inn, "books_out_dir": out, "glossary": gloss, "use_context": use_ctx}
 
 
-def save_folder_settings(books_in_dir: str, books_out_dir: str) -> None:
+def save_app_settings(books_in_dir: str, books_out_dir: str, glossary: str = "", use_context: bool = True) -> None:
     payload = {
         "books_in_dir": _to_stored_path(books_in_dir, DEFAULT_BOOKS_IN),
         "books_out_dir": _to_stored_path(books_out_dir, DEFAULT_BOOKS_OUT),
+        "glossary": glossary,
+        "use_context": use_context,
     }
     CONFIG_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def resolve_books_dirs() -> tuple[str, str]:
-    s = load_folder_settings()
+    s = load_app_settings()
     rin = s["books_in_dir"]
     rout = s["books_out_dir"]
     in_abs = rin if os.path.isabs(rin) else os.path.join(str(PROJECT_ROOT), rin)

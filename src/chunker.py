@@ -11,7 +11,11 @@ class DomBatcher:
         self.char_count = 0
         
     def add_tag(self, tag):
-        content = tag.decode_contents().strip()
+        if tag.name == 'img':
+            content = tag.get('alt', '').strip()
+        else:
+            content = tag.decode_contents().strip()
+            
         if not content:
             return
             
@@ -19,8 +23,11 @@ class DomBatcher:
         self.current_tags.append(tag)
         self.char_count += len(content)
         
+        # O flush ocorre quando passa do limite E acabou de processar um parágrafo.
+        # Caso ultrapasse muito o limite (ex: tabelas gigantes), faz flush na mesma para não quebrar o LLM.
         if self.char_count >= self.max_chars:
-            self._flush()
+            if tag.name == 'p' or self.char_count >= self.max_chars + 800:
+                self._flush()
             
     def _flush(self):
         if not self.current_batch:

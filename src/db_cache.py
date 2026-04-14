@@ -11,8 +11,10 @@ def _get_connection():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute('''
         CREATE TABLE IF NOT EXISTS translations (
-            hash_id TEXT PRIMARY KEY,
-            translated_text TEXT
+            hash_id TEXT,
+            epub_filename TEXT,
+            translated_text TEXT,
+            PRIMARY KEY(hash_id, epub_filename)
         )
     ''')
     conn.commit()
@@ -23,31 +25,31 @@ _conn = _get_connection()
 def _get_hash(text: str) -> str:
     return hashlib.md5(text.encode('utf-8')).hexdigest()
 
-def get_cached_translation(original_text: str) -> str:
+def get_cached_translation(original_text: str, epub_filename: str) -> str:
     with _db_lock:
         cursor = _conn.cursor()
-        cursor.execute('SELECT translated_text FROM translations WHERE hash_id = ?', (_get_hash(original_text),))
+        cursor.execute('SELECT translated_text FROM translations WHERE hash_id = ? AND epub_filename = ?', (_get_hash(original_text), epub_filename))
         row = cursor.fetchone()
         return row[0] if row else None
 
-def save_translation(original_text: str, translated_text: str):
+def save_translation(original_text: str, translated_text: str, epub_filename: str):
     with _db_lock:
         try:
             cursor = _conn.cursor()
             cursor.execute('''
-                INSERT OR REPLACE INTO translations (hash_id, translated_text)
-                VALUES (?, ?)
-            ''', (_get_hash(original_text), translated_text))
+                INSERT OR REPLACE INTO translations (hash_id, epub_filename, translated_text)
+                VALUES (?, ?, ?)
+            ''', (_get_hash(original_text), epub_filename, translated_text))
             _conn.commit()
         except Exception as e:
             print(f"\n[WARNING] Failed to save to cache DB: {e}")
 
-def close_and_clear_cache():
-    """Closes the connection and deletes the DB file upon success."""
+def clear_cache_for_epub(epub_filename: str):
+    """Deletes cached translations for a specific EPUB file upon success."""
     with _db_lock:
-        _conn.close()
         try:
-            if os.path.exists(DB_PATH):
-                os.remove(DB_PATH)
-        except Exception:
-            pass
+            cursor = _conn.cursor()
+            cursor.execute('DELETE FROM translations WHERE epub_filename = ?', (epub_filename,))
+            _conn.commit()
+        except Exception as e:
+            print(f"\n[WARNING] Failed to clear cache for {epub_filename}: {e}")
