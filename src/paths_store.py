@@ -10,6 +10,24 @@ CONFIG_PATH = PROJECT_ROOT / "itranslatebooks_config.json"
 
 DEFAULT_BOOKS_IN = "books_IN"
 DEFAULT_BOOKS_OUT = "books_OUT"
+DEFAULT_SYSTEM_PROMPT = """You are an elite literary translator specializing in localizing Light Novels into Brazilian Portuguese (PT-BR).
+Your mission is to provide a fluent, pleasant, and natural translation, respecting the stylistic norms of Brazil.
+
+STYLISTIC GUIDELINES (PT-BR):
+1. GERUND: Use the natural Brazilian gerund natively (e.g., 'estou fazendo' instead of 'estou a fazer').
+2. PRONOUNS: Use natural Brazilian pronominal placement. It can sound more fluent to use proclisis (e.g., 'me deu' instead of 'deu-me').
+3. VOCABULARY: Use Brazilian vocabulary (e.g., 'tela', 'celular', 'trem', 'banheiro', 'geladeira').
+4. ADDRESS: Default to using 'você' for dialogues, preserving the classic informality of Light Novels.
+5. SUFFIXES: Maintain Japanese honorific suffixes (-san, -kun, -sama, -chan, -senpai, -sensei) naturally if they appear.
+
+{GLOSSARY_SECTION}
+
+TECHNICAL OUTPUT RULES:
+- The input contains XML tags `<t id="...">` housing text blocks to be translated.
+- Translate the text inside the `<t>` tags contextually.
+- KEEP the exact sequence and IDs of the `<t>` tags in your output. Do not break or invent IDs.
+- Preserve any internal HTML (like `<a>` or `<span>`) within the `<t>` tags strictly.
+- Return ONLY the final structured XML snippet. No comments, no explanations."""
 
 
 def _to_stored_path(user_value: str, default: str) -> str:
@@ -25,35 +43,44 @@ def _to_stored_path(user_value: str, default: str) -> str:
 
 
 def load_app_settings() -> dict:
+    default_settings = {
+        "books_in_dir": DEFAULT_BOOKS_IN,
+        "books_out_dir": DEFAULT_BOOKS_OUT,
+        "glossary": "",
+        "use_context": True,
+        "save_translation_report": False,
+        "base_url": "http://127.0.0.1:1234/v1",
+        "model_name": "qwen3-v1-8b-instruct",
+        "max_workers": 3,
+        "system_prompt": DEFAULT_SYSTEM_PROMPT,
+    }
     if not CONFIG_PATH.is_file():
-        return {
-            "books_in_dir": DEFAULT_BOOKS_IN,
-            "books_out_dir": DEFAULT_BOOKS_OUT,
-            "glossary": "",
-            "use_context": True,
-            "save_translation_report": False,
-        }
+        return default_settings
     try:
         data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        return {
-            "books_in_dir": DEFAULT_BOOKS_IN,
-            "books_out_dir": DEFAULT_BOOKS_OUT,
-            "glossary": "",
-            "use_context": True,
-            "save_translation_report": False,
-        }
+        return default_settings
+    
     inn = str(data.get("books_in_dir") or "").strip() or DEFAULT_BOOKS_IN
     out = str(data.get("books_out_dir") or "").strip() or DEFAULT_BOOKS_OUT
     gloss = str(data.get("glossary", ""))
     use_ctx = data.get("use_context", True)
     save_report = bool(data.get("save_translation_report", False))
+    base_url = str(data.get("base_url") or "http://127.0.0.1:1234/v1")
+    model_name = str(data.get("model_name") or "qwen3-v1-8b-instruct")
+    max_workers = int(data.get("max_workers") or 3)
+    system_prompt = str(data.get("system_prompt") or DEFAULT_SYSTEM_PROMPT)
+
     return {
         "books_in_dir": inn,
         "books_out_dir": out,
         "glossary": gloss,
         "use_context": use_ctx,
         "save_translation_report": save_report,
+        "base_url": base_url,
+        "model_name": model_name,
+        "max_workers": max_workers,
+        "system_prompt": system_prompt,
     }
 
 
@@ -63,6 +90,10 @@ def save_app_settings(
     glossary: str = "",
     use_context: bool = True,
     save_translation_report: bool = False,
+    base_url: str = "http://127.0.0.1:1234/v1",
+    model_name: str = "qwen3-v1-8b-instruct",
+    max_workers: int = 3,
+    system_prompt: str = DEFAULT_SYSTEM_PROMPT,
 ) -> None:
     payload = {
         "books_in_dir": _to_stored_path(books_in_dir, DEFAULT_BOOKS_IN),
@@ -70,6 +101,10 @@ def save_app_settings(
         "glossary": glossary,
         "use_context": use_context,
         "save_translation_report": save_translation_report,
+        "base_url": base_url,
+        "model_name": model_name,
+        "max_workers": max_workers,
+        "system_prompt": system_prompt,
     }
     CONFIG_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 

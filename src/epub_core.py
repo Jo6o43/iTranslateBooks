@@ -34,6 +34,7 @@ def _write_translation_report(
     total_batches: int,
     num_documents: int,
     log_callback,
+    error_log: list = None,
 ) -> None:
     out_dir = os.path.dirname(config.output_file) or "."
     base = os.path.splitext(os.path.basename(config.output_file))[0]
@@ -102,6 +103,31 @@ def _write_translation_report(
     )
 
     try:
+        import psutil
+        process = psutil.Process()
+        mem_info = process.memory_info()
+        mem_mb = mem_info.rss / 1024 / 1024
+        lines.append(f"  Memória (Processo):   ~{mem_mb:.2f} MB")
+    except ImportError:
+        lines.append("  Memória (Processo):   N/A (instale 'psutil')")
+
+    lines.extend([
+        "",
+        "Prompt de Sistema",
+        "-" * 44,
+        config.system_prompt
+    ])
+
+    if error_log and len(error_log) > 0:
+        lines.extend([
+            "",
+            "Erros Encontrados (Logs)",
+            "-" * 44,
+        ])
+        for err in error_log:
+            lines.append(f"  - {err}\n")
+
+    try:
         with open(report_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")
         msg = f"[INFO] Relatório de tradução guardado: {report_path}"
@@ -117,7 +143,7 @@ def _write_translation_report(
             print(msg)
 
 
-async def process_document(batches, config: AppConfig, sem: asyncio.Semaphore, shared_state: dict, log_callback, progress_callback, total_batches: int):
+async def process_document(batches, config: AppConfig, sem: asyncio.Semaphore, shared_state: dict, log_callback, progress_callback, total_batches: int, error_log: list):
     context_str = ""
     for batch_tuple in batches:
         if config.cancel_event.is_set():
@@ -126,7 +152,7 @@ async def process_document(batches, config: AppConfig, sem: asyncio.Semaphore, s
         xml_payload, original_tags = batch_tuple
         
         async with sem:
-            translated_xml_or_fallback = await translate_batch_cached(xml_payload, config, context_str, log_callback)
+            translated_xml_or_fallback = await translate_batch_cached(xml_payload, config, context_str, log_callback, error_log)
             
         if config.use_context:
             context_str = translated_xml_or_fallback
@@ -141,7 +167,10 @@ async def process_document(batches, config: AppConfig, sem: asyncio.Semaphore, s
                         tag.clear()
                         tag.append(BeautifulSoup(translated_map[i], 'html.parser'))
         except Exception as e:
-            msg = f"\n[ERROR] Failed to map back translation batch: {e}"
+            import traceback
+            tb = traceback.format_exc()
+            msg = f"\n[ERROR] Failed to map back translation batch: {e}\nStacktrace: {tb}"
+            error_log.append(f"Map Error: {e}\n{tb}")
             if log_callback: log_callback(msg)
             else: print(msg)
             
@@ -155,8 +184,11 @@ async def process_document(batches, config: AppConfig, sem: asyncio.Semaphore, s
 
 def process_epub(config: AppConfig, log_callback=None, progress_callback=None):
     wall_start = time.time()
+    error_log = []
+    
     if not os.path.exists(config.input_file):
         msg = f"[ERROR] Input file not found: {config.input_file}"
+        error_log.append(msg)
         if log_callback: log_callback(msg)
         else: print(msg)
         return False
@@ -192,7 +224,7 @@ def process_epub(config: AppConfig, log_callback=None, progress_callback=None):
     sem = asyncio.Semaphore(config.max_workers)
     
     async def run_all():
-        tasks = [asyncio.create_task(process_document(batches, config, sem, shared_state, log_callback, progress_callback, total_batches)) for batches in documents_batches]
+        tasks = [asyncio.create_task(process_document(batches, config, sem, shared_state, log_callback, progress_callback, total_batches, error_log)) for batches in documents_batches]
         await asyncio.gather(*tasks)
         
     translation_start = time.time()
@@ -220,27 +252,30 @@ def process_epub(config: AppConfig, log_callback=None, progress_callback=None):
         book.set_title(f"{original_title} [PT-BR]")
         if log_callback: log_callback(f"[INFO] Título do livro atualizado para: {original_title} [PT-BR]")
 
-    os.makedirs(os.path.dirname(config.output_file) or '.', exist_ok=True)
-    epub.write_epub(config.output_file, book)
-    wall_end = time.time()
+    try:
+        os.makedirs(os.path.dirname(config.output_file) or '.', exist_ok=True)
+        epub.write_epub(config.output_file, book)
+        wall_end = time.time()
 
-    if config.save_translation_report:
-        _write_translation_report(
-            config,
-            wall_start,
-            wall_end,
-            translation_start,
-            translation_end,
-            total_batches,
-            num_documents,
-            log_callback,
-        )
+        if config.save_translation_report:
+            _write_translation_report(
+                config,
+                wall_start,
+                wall_end,
+                translation_start,
+                translation_end,
+                total_batches,
+                num_documents,
+                log_callback,
+                error_log,
+            )
 
-    success_msg = f"[SUCCESS] Livro traduzido e renderizado. Concluído em: {config.output_file}"
-    if log_callback: log_callback(success_msg)
-    else: print(success_msg)
-    
-    epub_filename = os.path.basename(config.input_file)
-    clear_cache_for_epub(epub_filename)
-    if log_callback: log_callback(f"[INFO] Cache da database deletada para o arquivo processado: {epub_filename}.")
-    return True
+        success_msg = f"[SUCCESS] Livro traduzido e renderizado. Concluído em: {config.output_file}"
+        if log_callback: log_callback(success_msg)
+        else: print(success_msg)
+        return True
+        
+    finally:
+        epub_filename = os.path.basename(config.input_file)
+        clear_cache_for_epub(epub_filename)
+        if log_callback: log_callback(f"[INFO] Database local apagada para: {epub_filename}.")

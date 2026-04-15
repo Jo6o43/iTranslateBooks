@@ -572,6 +572,18 @@ class TranslatorApp(ctk.CTk):
                 self.report_checkbox.select()
             else:
                 self.report_checkbox.deselect()
+                
+            self.url_entry.delete(0, "end")
+            self.url_entry.insert(0, s.get("base_url", "http://127.0.0.1:1234/v1"))
+            self.model_entry.delete(0, "end")
+            self.model_entry.insert(0, s.get("model_name", "qwen3-v1-8b-instruct"))
+            self.worker_slider.set(s.get("max_workers", 3))
+            self.slider_label.configure(text=f"Workers: {int(s.get('max_workers', 3))}")
+
+        if hasattr(self, "prompt_text"):
+            self.prompt_text.delete("0.0", "end")
+            self.prompt_text.insert("0.0", s.get("system_prompt", DEFAULT_SYSTEM_PROMPT))
+
         self.books_path.configure(text=f"{s['books_in_dir'].rstrip(os.sep).rstrip('/')}/")
         self.status_right.configure(text=f"{s['books_in_dir']} → {s['books_out_dir']}")
 
@@ -582,6 +594,10 @@ class TranslatorApp(ctk.CTk):
             self.glossary_text.get("0.0", "end").strip(),
             bool(self.context_checkbox.get()),
             bool(self.report_checkbox.get()),
+            self.url_entry.get().strip(),
+            self.model_entry.get().strip(),
+            int(self.worker_slider.get()),
+            self.prompt_text.get("0.0", "end").strip()
         )
         self._sync_books_paths_ui()
         self.refresh_books()

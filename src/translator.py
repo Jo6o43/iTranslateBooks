@@ -31,10 +31,11 @@ async def _call_llm(xml_payload: str, config: AppConfig, context_str: str) -> st
     )
     return response.choices[0].message.content
 
-async def translate_batch_cached(xml_payload: str, config: AppConfig, context_str: str = '', log_callback=None) -> str:
+async def translate_batch_cached(xml_payload: str, config: AppConfig, context_str: str = '', log_callback=None, error_log: list = None) -> str:
     xml_payload = sanitize_text(xml_payload)
     
     import os
+    import traceback
     epub_filename = os.path.basename(config.input_file)
     
     cached = get_cached_translation(xml_payload, epub_filename)
@@ -46,9 +47,12 @@ async def translate_batch_cached(xml_payload: str, config: AppConfig, context_st
         save_translation(xml_payload, translated, epub_filename)
         return translated
     except Exception as e:
-        msg = f"\n[ERROR] Translation failed after 4 retries. Skipping chunk. Reason: {e}"
+        tb = traceback.format_exc()
+        msg = f"\n[ERROR] Translation failed after 4 retries. Skipping chunk. Reason: {e}\nStacktrace: {tb}\nPayload: {xml_payload[:200]}..."
         if log_callback:
             log_callback(msg)
         else:
             print(msg)
+        if error_log is not None:
+            error_log.append(f"LLM Error: {e}\nPayload snippet: {xml_payload[:100]}...\n{tb}")
         return xml_payload
