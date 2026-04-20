@@ -9,6 +9,14 @@ def sanitize_text(text: str) -> str:
     text = re.sub(r'[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf\u3000-\u303f\uff00-\uffef]', '', text)
     return text
 
+def check_xml_integrity(original_xml: str, translated_xml: str) -> bool:
+    orig_matches = re.findall(r'<t\s+id=["\']?(\d+)["\']?>', original_xml)
+    trans_matches = re.findall(r'<t\s+id=["\']?(\d+)["\']?>', translated_xml)
+    missing = set(orig_matches) - set(trans_matches)
+    if missing:
+        raise ValueError(f"LLM format error. Missing chunk IDs: {missing}")
+    return True
+
 @retry(
     stop=stop_after_attempt(4),
     wait=wait_exponential(multiplier=1, min=2, max=10),
@@ -27,11 +35,15 @@ async def _call_llm(xml_payload: str, config: AppConfig, context_str: str) -> st
     response = await client.chat.completions.create(
         model=config.model_name,
         messages=messages,
-        temperature=0.4
+        temperature=getattr(config, 'temperature', 0.4)
     )
-    return response.choices[0].message.content
+    content = response.choices[0].message.content
+    check_xml_integrity(xml_payload, content)
+    usage = getattr(response, 'usage', None)
+    tokens = getattr(usage, 'completion_tokens', 0) if usage else 0
+    return content, tokens
 
-async def translate_batch_cached(xml_payload: str, config: AppConfig, context_str: str = '', log_callback=None, error_log: list = None) -> str:
+async def translate_batch_cached(xml_payload: str, config: AppConfig, context_str: str = '', log_callback=None, error_log: list = None) -> tuple[str, int]:
     xml_payload = sanitize_text(xml_payload)
     
     import os
@@ -40,12 +52,12 @@ async def translate_batch_cached(xml_payload: str, config: AppConfig, context_st
     
     cached = get_cached_translation(xml_payload, epub_filename)
     if cached:
-        return cached
+        return cached, 0
         
     try:
-        translated = await _call_llm(xml_payload, config, context_str)
+        translated, tokens = await _call_llm(xml_payload, config, context_str)
         save_translation(xml_payload, translated, epub_filename)
-        return translated
+        return translated, tokens
     except Exception as e:
         error_str = str(e)
         if "Context size has been exceeded" in error_str and context_str:
@@ -55,9 +67,9 @@ async def translate_batch_cached(xml_payload: str, config: AppConfig, context_st
             if log_callback:
                 log_callback(f"\n[WARNING] Limite de Contexto ultrapassado! A tentar traduzir o bloco isoladamente sem o contexto anterior para não interromper...")
             try:
-                translated = await _call_llm(xml_payload, config, "")
+                translated, tokens = await _call_llm(xml_payload, config, "")
                 save_translation(xml_payload, translated, epub_filename)
-                return translated
+                return translated, tokens
             except Exception as e2:
                 e = e2
 
@@ -69,4 +81,4 @@ async def translate_batch_cached(xml_payload: str, config: AppConfig, context_st
             print(msg)
         if error_log is not None:
             error_log.append(f"LLM Error: {e}\nPayload snippet: {xml_payload[:100]}...\n{tb}")
-        return xml_payload
+        return xml_payload, 0

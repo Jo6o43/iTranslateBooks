@@ -36,10 +36,12 @@ def load_app_settings() -> dict:
         "base_url": "http://127.0.0.1:1234/v1",
         "model_name": "qwen3-v1-8b-instruct",
         "max_workers": 3,
+        "temperature": 0.4,
         "language_prompt": DEFAULT_LANGUAGE_PROMPT,
         "custom_lang_prompts": {},
         "advanced_prompt": DEFAULT_ADVANCED_PROMPT,
         "custom_adv_prompts": {},
+        "pending_queue": [],
     }
     if not CONFIG_PATH.is_file():
         return default_settings
@@ -56,6 +58,8 @@ def load_app_settings() -> dict:
     base_url = str(data.get("base_url") or "http://127.0.0.1:1234/v1")
     model_name = str(data.get("model_name") or "qwen3-v1-8b-instruct")
     max_workers = int(data.get("max_workers") or 3)
+    temperature = float(data.get("temperature", 0.4))
+    pending_queue = data.get("pending_queue", [])
 
     # Dual-prompt support (with legacy single system_prompt migration)
     language_prompt = str(data.get("language_prompt") or data.get("system_prompt") or DEFAULT_LANGUAGE_PROMPT)
@@ -72,10 +76,12 @@ def load_app_settings() -> dict:
         "base_url": base_url,
         "model_name": model_name,
         "max_workers": max_workers,
+        "temperature": temperature,
         "language_prompt": language_prompt,
         "custom_lang_prompts": custom_lang_prompts,
         "advanced_prompt": advanced_prompt,
         "custom_adv_prompts": custom_adv_prompts,
+        "pending_queue": pending_queue,
     }
 
 
@@ -88,15 +94,19 @@ def save_app_settings(
     base_url: str = "http://127.0.0.1:1234/v1",
     model_name: str = "qwen3-v1-8b-instruct",
     max_workers: int = 3,
+    temperature: float = 0.4,
     language_prompt: str = DEFAULT_LANGUAGE_PROMPT,
     custom_lang_prompts: dict = None,
     advanced_prompt: str = DEFAULT_ADVANCED_PROMPT,
     custom_adv_prompts: dict = None,
+    pending_queue: list = None,
 ) -> None:
     if custom_lang_prompts is None:
         custom_lang_prompts = {}
     if custom_adv_prompts is None:
         custom_adv_prompts = {}
+    if pending_queue is None:
+        pending_queue = []
     payload = {
         "books_in_dir": _to_stored_path(books_in_dir, DEFAULT_BOOKS_IN),
         "books_out_dir": _to_stored_path(books_out_dir, DEFAULT_BOOKS_OUT),
@@ -106,10 +116,12 @@ def save_app_settings(
         "base_url": base_url,
         "model_name": model_name,
         "max_workers": max_workers,
+        "temperature": temperature,
         "language_prompt": language_prompt,
         "custom_lang_prompts": custom_lang_prompts,
         "advanced_prompt": advanced_prompt,
         "custom_adv_prompts": custom_adv_prompts,
+        "pending_queue": pending_queue,
     }
     CONFIG_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 

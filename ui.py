@@ -290,6 +290,9 @@ class TranslatorApp(ctk.CTk):
     def update_slider_label(self, value):
         self.slider_label.configure(text=f"Workers: {int(value)}")
 
+    def update_temp_label(self, value):
+        self.temp_label.configure(text=f"Temperature: {float(value):.2f}")
+
     def set_status(self, text: str):
         self.status_left.configure(text=text)
 
@@ -650,6 +653,10 @@ class TranslatorApp(ctk.CTk):
             self.model_entry.insert(0, s.get("model_name", "qwen3-v1-8b-instruct"))
             self.worker_slider.set(s.get("max_workers", 3))
             self.slider_label.configure(text=f"Workers: {int(s.get('max_workers', 3))}")
+            if hasattr(self, "temp_slider"):
+                t = float(s.get("temperature", 0.4))
+                self.temp_slider.set(t)
+                self.temp_label.configure(text=f"Temperature: {t:.2f}")
 
         self.custom_lang_prompts = s.get("custom_lang_prompts", {})
         self.custom_adv_prompts = s.get("custom_adv_prompts", {})
@@ -666,6 +673,9 @@ class TranslatorApp(ctk.CTk):
 
         self.books_path.configure(text=f"{s['books_in_dir'].rstrip(os.sep).rstrip('/')}/")
         self.status_right.configure(text=f"{s['books_in_dir']} → {s['books_out_dir']}")
+        self.queue_items = s.get("pending_queue", [])
+        if hasattr(self, "queue_list"):
+            self.after(0, self._render_queue)
 
     def save_folder_paths(self):
         lang_text = self.lang_prompt_text.get("0.0", "end").strip() if hasattr(self, "lang_prompt_text") else DEFAULT_LANGUAGE_PROMPT
@@ -679,10 +689,12 @@ class TranslatorApp(ctk.CTk):
             self.url_entry.get().strip(),
             self.model_entry.get().strip(),
             int(self.worker_slider.get()),
+            float(self.temp_slider.get()) if hasattr(self, "temp_slider") else 0.4,
             lang_text,
             self.custom_lang_prompts,
             adv_text,
             self.custom_adv_prompts,
+            [i for i in self.queue_items if i.get("status") == "PENDING"] if hasattr(self, "queue_items") else [],
         )
         self._sync_books_paths_ui()
         self.refresh_books()
@@ -799,21 +811,36 @@ class TranslatorApp(ctk.CTk):
         self.worker_slider.set(3)
         self.worker_slider.grid(row=9, column=0, padx=12, pady=(0, 12), sticky="ew")
 
+        self.temp_label = ctk.CTkLabel(form, text=f"Temperature: {float(s0.get('temperature', 0.4)):.2f}", text_color=CURSOR_MUTED, font=ctk.CTkFont(size=12))
+        self.temp_label.grid(row=10, column=0, padx=12, pady=(0, 2), sticky="w")
+
+        self.temp_slider = ctk.CTkSlider(
+            form,
+            from_=0.0,
+            to=1.0,
+            number_of_steps=20,
+            command=self.update_temp_label,
+            corner_radius=R0,
+            button_corner_radius=R0,
+        )
+        self.temp_slider.set(float(s0.get("temperature", 0.4)))
+        self.temp_slider.grid(row=11, column=0, padx=12, pady=(0, 12), sticky="ew")
+
         self.glossary_label = ctk.CTkLabel(form, text="Glossário Dinâmico (Presets salvos em JSON):\nEscreva Ex: 'Mage: Mago'", text_color=CURSOR_MUTED, font=ctk.CTkFont(size=12), justify="left")
-        self.glossary_label.grid(row=10, column=0, padx=12, pady=(4, 4), sticky="w")
+        self.glossary_label.grid(row=12, column=0, padx=12, pady=(4, 4), sticky="w")
 
         self.glossary_text = ctk.CTkTextbox(form, height=60, corner_radius=R0)
-        self.glossary_text.grid(row=11, column=0, padx=12, pady=(0, 8), sticky="ew")
+        self.glossary_text.grid(row=13, column=0, padx=12, pady=(0, 8), sticky="ew")
 
         self.context_checkbox = ctk.CTkCheckBox(form, text="Usar Contexto Anterior (Reduz alucinações de gêneros, ligeiramente mais lento)", corner_radius=R0)
-        self.context_checkbox.grid(row=12, column=0, padx=12, pady=(4, 8), sticky="w")
+        self.context_checkbox.grid(row=14, column=0, padx=12, pady=(4, 8), sticky="w")
 
         self.report_checkbox = ctk.CTkCheckBox(
             form,
             text="Guardar relatório TXT após tradução (tempos, ficheiros e config — útil para comparar execuções)",
             corner_radius=R0,
         )
-        self.report_checkbox.grid(row=13, column=0, padx=12, pady=(0, 8), sticky="w")
+        self.report_checkbox.grid(row=15, column=0, padx=12, pady=(0, 8), sticky="w")
         if s0.get("save_translation_report", False):
             self.report_checkbox.select()
 
@@ -991,14 +1018,15 @@ class TranslatorApp(ctk.CTk):
             self.console.configure(state="disabled")
         self.after(0, append)
 
-    def update_progress(self, current, total, elapsed, eta):
+    def update_progress(self, current, total, elapsed, eta, tps=None):
         def update():
             m, s = divmod(int(eta), 60)
             h, m = divmod(m, 60)
             time_str = f"{h}h {m}m" if h > 0 else f"{m}m {s}s"
             pct = int(current / total * 100) if total > 0 else 0
             self.progress_bar.set(current / total if total > 0 else 0)
-            self.eta_label.configure(text=f"{pct}% | ETA: {time_str} | {current}/{total}")
+            tps_str = f" | Speed: {tps:.1f} t/s" if tps and tps > 0 else ""
+            self.eta_label.configure(text=f"{pct}% | ETA: {time_str}{tps_str} | {current}/{total}")
             self.set_status(f"Running… {pct}%")
         self.after(0, update)
 
@@ -1037,6 +1065,7 @@ class TranslatorApp(ctk.CTk):
         url = self.url_entry.get()
         model = self.model_entry.get()
         workers = int(self.worker_slider.get())
+        temp = float(self.temp_slider.get())
         lang_prompt = self.lang_prompt_text.get("0.0", "end").strip()
         adv_prompt = self.adv_prompt_text.get("0.0", "end").strip()
         glossary = self.glossary_text.get("0.0", "end").strip()
@@ -1053,9 +1082,9 @@ class TranslatorApp(ctk.CTk):
             lang_prompt += "\n" + glossary_block
 
         # Disparar numa worker thread para garantir que o UI não se congele.
-        threading.Thread(target=self._worker_thread, args=(selected_files, url, model, workers, lang_prompt, adv_prompt, use_ctx), daemon=True).start()
+        threading.Thread(target=self._worker_thread, args=(selected_files, url, model, workers, temp, lang_prompt, adv_prompt, use_ctx), daemon=True).start()
 
-    def _worker_thread(self, files, url, model, workers, lang_prompt, adv_prompt, use_ctx):
+    def _worker_thread(self, files, url, model, workers, temp, lang_prompt, adv_prompt, use_ctx):
         self.log(f"[INFO] A verificar conexão ao servidor local ({url})...")
         import urllib.request
         try:
@@ -1082,6 +1111,7 @@ class TranslatorApp(ctk.CTk):
                 output_file=output_file,
                 model_name=model,
                 base_url=url,
+                temperature=temp,
                 language_prompt=lang_prompt,
                 advanced_prompt=adv_prompt,
                 max_workers=workers,

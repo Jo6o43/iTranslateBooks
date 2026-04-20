@@ -151,7 +151,7 @@ async def process_document(batches, config: AppConfig, sem: asyncio.Semaphore, s
         xml_payload, original_tags = batch_tuple
         
         async with sem:
-            translated_xml_or_fallback = await translate_batch_cached(xml_payload, config, context_str, log_callback, error_log)
+            translated_xml_or_fallback, tokens = await translate_batch_cached(xml_payload, config, context_str, log_callback, error_log)
             
         plain_text_context = ""
         try:
@@ -173,14 +173,17 @@ async def process_document(batches, config: AppConfig, sem: asyncio.Semaphore, s
             else: print(msg)
             
         shared_state['completed'] += 1
+        shared_state['tokens'] = shared_state.get('tokens', 0) + tokens
         if progress_callback:
             elapsed = time.time() - shared_state['start_time']
             comp = shared_state['completed']
+            t_total = shared_state['tokens']
+            tps = (t_total / elapsed) if elapsed > 0 else 0
             if comp > 0:
                 avg_time_per_batch = elapsed / comp
                 remaining_batches = total_batches - comp
                 eta = avg_time_per_batch * remaining_batches
-                progress_callback(comp, total_batches, elapsed, eta)
+                progress_callback(comp, total_batches, elapsed, eta, tps)
                 
         return plain_text_context
 

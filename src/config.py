@@ -36,6 +36,7 @@ class AppConfig:
     language_prompt: str = DEFAULT_LANGUAGE_PROMPT
     advanced_prompt: str = DEFAULT_ADVANCED_PROMPT
     max_workers: int = 3
+    temperature: float = 0.4
     db_path: str = "database/cache.sqlite"
     use_context: bool = True
     save_translation_report: bool = False

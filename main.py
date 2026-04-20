@@ -23,12 +23,15 @@ class CLI_Runner:
         else:
             print(msg)
 
-    def progress(self, current, total, elapsed, eta):
+    def progress(self, current, total, elapsed, eta, tps=None):
         if self.pbar is None:
             self.pbar = tqdm(total=total, desc="Progress", unit="batch")
         
         self.pbar.n = current
-        self.pbar.set_postfix({"ETA": _format_time(eta)})
+        postfix_data = {"ETA": _format_time(eta)}
+        if tps and tps > 0:
+            postfix_data["Speed"] = f"{tps:.1f} t/s"
+        self.pbar.set_postfix(postfix_data)
         self.pbar.refresh()
         
         if current >= total and self.pbar:
