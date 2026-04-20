@@ -144,21 +144,19 @@ def _write_translation_report(
 
 
 async def process_document(batches, config: AppConfig, sem: asyncio.Semaphore, shared_state: dict, log_callback, progress_callback, total_batches: int, error_log: list):
-    context_str = ""
-    for batch_tuple in batches:
+    async def _process_batch(batch_tuple, context_str=""):
         if config.cancel_event.is_set():
-            return
+            return ""
             
         xml_payload, original_tags = batch_tuple
         
         async with sem:
             translated_xml_or_fallback = await translate_batch_cached(xml_payload, config, context_str, log_callback, error_log)
             
-        if config.use_context:
-            context_str = translated_xml_or_fallback
-            
+        plain_text_context = ""
         try:
             translated_map = parse_translated_batch(translated_xml_or_fallback)
+            plain_text_context = " ".join(filter(None, translated_map.values()))
             for i, tag in enumerate(original_tags):
                 if i in translated_map and translated_map[i]:
                     if tag.name == 'img':
@@ -177,10 +175,25 @@ async def process_document(batches, config: AppConfig, sem: asyncio.Semaphore, s
         shared_state['completed'] += 1
         if progress_callback:
             elapsed = time.time() - shared_state['start_time']
-            avg_time_per_batch = elapsed / shared_state['completed']
-            remaining_batches = total_batches - shared_state['completed']
-            eta = avg_time_per_batch * remaining_batches
-            progress_callback(shared_state['completed'], total_batches, elapsed, eta)
+            comp = shared_state['completed']
+            if comp > 0:
+                avg_time_per_batch = elapsed / comp
+                remaining_batches = total_batches - comp
+                eta = avg_time_per_batch * remaining_batches
+                progress_callback(comp, total_batches, elapsed, eta)
+                
+        return plain_text_context
+
+    if config.use_context:
+        context_str = ""
+        for batch_tuple in batches:
+            if config.cancel_event.is_set():
+                break
+            context_str = await _process_batch(batch_tuple, context_str)
+    else:
+        tasks = [_process_batch(b, "") for b in batches]
+        if tasks:
+            await asyncio.gather(*tasks)
 
 def process_epub(config: AppConfig, log_callback=None, progress_callback=None):
     wall_start = time.time()
@@ -205,6 +218,9 @@ def process_epub(config: AppConfig, log_callback=None, progress_callback=None):
         soup = BeautifulSoup(item.get_content(), 'html.parser')
         batcher = DomBatcher(max_chars=1500)
         for tag in soup.find_all(['p', 'h1', 'h2', 'h3', 'img']):
+            # Avoid processing nested tags (e.g. <img> inside <p>) separately
+            if any(p.name in ['p', 'h1', 'h2', 'h3'] for p in tag.parents):
+                continue
             batcher.add_tag(tag)
         batches = batcher.finish()
         if batches:
@@ -248,7 +264,9 @@ def process_epub(config: AppConfig, log_callback=None, progress_callback=None):
         # Pega no primeiro título e acrescenta "[PT-BR]"
         original_title = titles[0][0]
         # Limpar titles anteriores
-        book.metadata['http://purl.org/dc/elements/1.1/']['title'] = []
+        dc_namespace = 'http://purl.org/dc/elements/1.1/'
+        if dc_namespace in book.metadata and 'title' in book.metadata[dc_namespace]:
+            book.metadata[dc_namespace]['title'] = []
         book.set_title(f"{original_title} [PT-BR]")
         if log_callback: log_callback(f"[INFO] Título do livro atualizado para: {original_title} [PT-BR]")
 

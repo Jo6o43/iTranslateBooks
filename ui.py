@@ -561,8 +561,13 @@ class TranslatorApp(ctk.CTk):
         footer.grid(row=2, column=0, padx=12, pady=(0, 12), sticky="ew")
         footer.grid_columnconfigure(0, weight=1)
 
+        sel_frame = ctk.CTkFrame(footer, fg_color="transparent")
+        sel_frame.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        sel_frame.grid_columnconfigure(0, weight=1)
+        sel_frame.grid_columnconfigure(1, weight=1)
+
         self.select_all_btn = ctk.CTkButton(
-            footer,
+            sel_frame,
             text="Select all",
             corner_radius=R0,
             fg_color=CURSOR_PANEL,
@@ -574,7 +579,7 @@ class TranslatorApp(ctk.CTk):
         self.select_all_btn.grid(row=0, column=0, sticky="ew", padx=(0, 6))
 
         self.clear_all_btn = ctk.CTkButton(
-            footer,
+            sel_frame,
             text="Clear",
             corner_radius=R0,
             fg_color=CURSOR_PANEL,
@@ -583,7 +588,42 @@ class TranslatorApp(ctk.CTk):
             border_color=CURSOR_BORDER,
             command=lambda: self._set_all_books(False),
         )
-        self.clear_all_btn.grid(row=0, column=1, sticky="ew", padx=(6, 0))
+        self.clear_all_btn.grid(row=0, column=1, sticky="ew")
+
+        self.add_to_queue_btn = ctk.CTkButton(
+            footer,
+            text="📥 Adicionar à Fila",
+            corner_radius=R0,
+            fg_color=CURSOR_PANEL,
+            hover_color="#2f2f2f",
+            border_width=1,
+            border_color=CURSOR_BORDER,
+            command=self.add_selected_to_queue,
+        )
+        self.add_to_queue_btn.grid(row=1, column=0, sticky="ew")
+
+    def add_selected_to_queue(self):
+        selected_files = [file for cb, file in self.checkboxes if cb.get()]
+        if not selected_files:
+            self.log("[WARNING] Nenhum livro selecionado para adicionar!")
+            return
+        
+        self.books_out_abs = self._resolve_path_from_entry(self.books_out_entry)
+        added = 0
+        existing = {item["input"] for item in self.queue_items}
+        for f in selected_files:
+            if f not in existing:
+                out = output_path_for_epub(f, self.books_out_abs)
+                self.queue_items.append({"input": f, "output": out, "status": "PENDING", "seconds": None})
+                added += 1
+                existing.add(f)
+        
+        self._set_all_books(False)
+        if added > 0:
+            self.log(f"[INFO] Adicionados {added} livros à fila.")
+            self._render_queue()
+        else:
+            self.log("[INFO] Os livros selecionados já estavam na fila.")
 
     def _sync_books_paths_ui(self):
         self.books_in_abs, self.books_out_abs = ensure_books_dirs()
@@ -981,17 +1021,10 @@ class TranslatorApp(ctk.CTk):
         except OSError:
             pass
 
-        selected_files = [file for cb, file in self.checkboxes if cb.get()]
+        selected_files = [item["input"] for item in self.queue_items if item.get("status") == "PENDING"]
         if not selected_files:
-            self.log("[WARNING] Nenhum livro selecionado para traduzir!")
+            self.log("[WARNING] A Fila não tem livros pendentes para traduzir!")
             return
-
-        # Build queue
-        self.queue_items = []
-        for f in selected_files:
-            out = output_path_for_epub(f, self.books_out_abs)
-            self.queue_items.append({"input": f, "output": out, "status": "PENDING", "seconds": None})
-        self._render_queue()
 
         self.is_running = True
         self.cancel_event.clear()
@@ -999,7 +1032,7 @@ class TranslatorApp(ctk.CTk):
         self.stop_btn.configure(state="normal")
         self.set_status("Running…")
         self.log("\n" + "="*40)
-        self.log(f"[INFO] A preparar lista de {len(selected_files)} livros...")
+        self.log(f"[INFO] A iniciar tradução de {len(selected_files)} livros pendentes...")
         
         url = self.url_entry.get()
         model = self.model_entry.get()

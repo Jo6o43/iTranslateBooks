@@ -43,7 +43,8 @@ def run_translation(input_file, output_file, max_workers, model, base_url):
         max_workers=max_workers,
         model_name=model,
         base_url=base_url,
-        system_prompt=s.get("system_prompt", ""),
+        language_prompt=s.get("language_prompt", ""),
+        advanced_prompt=s.get("advanced_prompt", ""),
         save_translation_report=bool(s.get("save_translation_report", False)),
     )
     runner = CLI_Runner()

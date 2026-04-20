@@ -16,6 +16,8 @@ def _get_connection(epub_filename: str):
         db_path = _get_db_path(epub_filename)
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         conn = sqlite3.connect(db_path, check_same_thread=False)
+        conn.execute('PRAGMA journal_mode=WAL;')
+        conn.execute('PRAGMA synchronous=NORMAL;')
         conn.execute('''
             CREATE TABLE IF NOT EXISTS translations (
                 hash_id TEXT,
