@@ -4,3 +4,4 @@ openai
 tqdm
 tenacity
 customtkinter
+psutil

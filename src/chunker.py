@@ -87,7 +87,7 @@ def parse_translated_batch(translated_xml: str) -> dict:
     
     # We aggressively find <t id="x">...</t>
     results = {}
-    pattern = re.compile(r'<t\s+id=["\'"]?(\d+)["\'"]?>(.*?)</t>', re.DOTALL)
+    pattern = re.compile(r'<t\s+id=["\']?(\d+)["\']?>(.*?)</t>', re.DOTALL)
     matches = pattern.findall(xml_str)
     for t_id, t_content in matches:
         results[int(t_id)] = _postprocess(t_content.strip())

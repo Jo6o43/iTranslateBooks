@@ -1,12 +1,19 @@
+import os
+import traceback
+from functools import lru_cache
 import openai
 import re
 from tenacity import retry, stop_after_attempt, wait_exponential
 from src.db_cache import get_cached_translation, save_translation
 from src.config import AppConfig
 
+@lru_cache(maxsize=1)
+def get_client(base_url: str):
+    return openai.AsyncOpenAI(base_url=base_url, api_key="lm-studio")
+
 def sanitize_text(text: str) -> str:
     text = text.replace('\ufffd', '')
-    text = re.sub(r'[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf\u3000-\u303f\uff00-\uffef]', '', text)
+    text = re.sub(r'[\ud800-\udfff]', '', text)
     return text
 
 def check_xml_integrity(original_xml: str, translated_xml: str) -> bool:
@@ -23,7 +30,7 @@ def check_xml_integrity(original_xml: str, translated_xml: str) -> bool:
     reraise=True
 )
 async def _call_llm(xml_payload: str, config: AppConfig, context_str: str) -> str:
-    client = openai.AsyncOpenAI(base_url=config.base_url, api_key="lm-studio")
+    client = get_client(config.base_url)
     
     messages = [{"role": "system", "content": config.system_prompt}]
     if context_str and config.use_context:
@@ -35,7 +42,7 @@ async def _call_llm(xml_payload: str, config: AppConfig, context_str: str) -> st
     response = await client.chat.completions.create(
         model=config.model_name,
         messages=messages,
-        temperature=getattr(config, 'temperature', 0.4)
+        temperature=config.temperature
     )
     content = response.choices[0].message.content
     check_xml_integrity(xml_payload, content)
@@ -46,8 +53,6 @@ async def _call_llm(xml_payload: str, config: AppConfig, context_str: str) -> st
 async def translate_batch_cached(xml_payload: str, config: AppConfig, context_str: str = '', log_callback=None, error_log: list = None) -> tuple[str, int]:
     xml_payload = sanitize_text(xml_payload)
     
-    import os
-    import traceback
     epub_filename = os.path.basename(config.input_file)
     
     cached = get_cached_translation(xml_payload, epub_filename)

@@ -74,9 +74,13 @@ def main():
         if not files:
             print(f"[INFO] Nenhum livro .epub encontrado em {books_in}")
             return
+            
+        if args.output:
+            print("[WARNING] O argumento --output é ignorado no modo de tradução em lote. A usar caminho automático.")
+            
         for file in files:
             filename = os.path.basename(file)
-            output = args.output or output_path_for_epub(file, books_out)
+            output = output_path_for_epub(file, books_out)
             run_translation(file, output, args.workers, args.model, args.url)
 
 if __name__ == "__main__":

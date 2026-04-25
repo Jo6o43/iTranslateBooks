@@ -214,36 +214,60 @@ def process_epub(config: AppConfig, log_callback=None, progress_callback=None):
     book = epub.read_epub(config.input_file)
     items = list(book.get_items_of_type(ebooklib.ITEM_DOCUMENT))
     
-    documents_batches = []
     total_batches = 0
+    num_documents = 0
     
+    # Pass 1: Count batches to allow accurate ETA without keeping all soups in memory
     for item in items:
         soup = BeautifulSoup(item.get_content(), 'html.parser')
         batcher = DomBatcher(max_chars=1500)
-        for tag in soup.find_all(['p', 'h1', 'h2', 'h3', 'img']):
-            # Avoid processing nested tags (e.g. <img> inside <p>) separately
-            if any(p.name in ['p', 'h1', 'h2', 'h3'] for p in tag.parents):
+        target_tags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'li', 'div', 'td', 'figcaption', 'img']
+        avoid_parents = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'li', 'div', 'td', 'figcaption']
+        
+        for tag in soup.find_all(target_tags):
+            if any(p.name in avoid_parents for p in tag.parents):
                 continue
             batcher.add_tag(tag)
         batches = batcher.finish()
         if batches:
-            documents_batches.append(batches)
+            num_documents += 1
             total_batches += len(batches)
-        
-        item._parsed_soup = soup
         
     if total_batches == 0:
         if log_callback: log_callback("[INFO] Documento sem texto detetado para traduzir.")
         return True
 
-    num_documents = len(documents_batches)
     if log_callback: log_callback(f"[*] Tradução em andamento. Total de Envios (Chunks): {total_batches}")
     
-    shared_state = {'completed': 0, 'start_time': time.time()}
+    shared_state = {'completed': 0, 'start_time': time.time(), 'tokens': 0}
     sem = asyncio.Semaphore(config.max_workers)
     
+    # Limit number of documents loaded in memory at once
+    doc_sem = asyncio.Semaphore(config.max_workers + 2)
+    
+    async def process_single_item(item):
+        if config.cancel_event.is_set():
+            return
+            
+        async with doc_sem:
+            if config.cancel_event.is_set():
+                return
+            
+            soup = BeautifulSoup(item.get_content(), 'html.parser')
+            batcher = DomBatcher(max_chars=1500)
+            for tag in soup.find_all(target_tags):
+                if any(p.name in avoid_parents for p in tag.parents):
+                    continue
+                batcher.add_tag(tag)
+            batches = batcher.finish()
+            
+            if batches:
+                await process_document(batches, config, sem, shared_state, log_callback, progress_callback, total_batches, error_log)
+                
+            item.set_content(str(soup).encode('utf-8'))
+
     async def run_all():
-        tasks = [asyncio.create_task(process_document(batches, config, sem, shared_state, log_callback, progress_callback, total_batches, error_log)) for batches in documents_batches]
+        tasks = [asyncio.create_task(process_single_item(item)) for item in items]
         await asyncio.gather(*tasks)
         
     translation_start = time.time()
@@ -255,18 +279,13 @@ def process_epub(config: AppConfig, log_callback=None, progress_callback=None):
         return False
         
     if log_callback: log_callback("[*] Tradução das tags concluída. Reconstruindo EPUB...")
-    for item in items:
-        if hasattr(item, '_parsed_soup'):
-            item.set_content(str(item._parsed_soup).encode('utf-8'))
 
     book.set_language('pt-BR')
     
     # Atualizar Metadados
     titles = book.get_metadata('DC', 'title')
     if titles:
-        # Pega no primeiro título e acrescenta "[PT-BR]"
         original_title = titles[0][0]
-        # Limpar titles anteriores
         dc_namespace = 'http://purl.org/dc/elements/1.1/'
         if dc_namespace in book.metadata and 'title' in book.metadata[dc_namespace]:
             book.metadata[dc_namespace]['title'] = []
@@ -294,9 +313,12 @@ def process_epub(config: AppConfig, log_callback=None, progress_callback=None):
         success_msg = f"[SUCCESS] Livro traduzido e renderizado. Concluído em: {config.output_file}"
         if log_callback: log_callback(success_msg)
         else: print(success_msg)
-        return True
         
-    finally:
         epub_filename = os.path.basename(config.input_file)
         clear_cache_for_epub(epub_filename)
         if log_callback: log_callback(f"[INFO] Database local apagada para: {epub_filename}.")
+        
+        return True
+        
+    finally:
+        pass
